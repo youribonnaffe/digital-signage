@@ -3,7 +3,68 @@
 <head>
     <title></title>
     <meta charset="utf-8">
-    <style></style>
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        #clients {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .client {
+            border: 1px solid black;
+            padding: 5px;
+        }
+
+        .form-container {
+            display: flex;
+        }
+
+        .form {
+            width: 100%;
+            margin: 10px;
+        }
+
+        .form > * {
+            padding: 2px;
+        }
+
+        .grow {
+            flex-grow: 1;
+        }
+
+        input {
+            width: 60%;
+        }
+
+        .frame-container {
+            width: 480px;
+            height: 320px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .frame {
+            width: 400%;
+            height: 400%;
+            border: 0;
+            -ms-transform: scale(0.25);
+            -moz-transform: scale(0.25);
+            -o-transform: scale(0.25);
+            -webkit-transform: scale(0.25);
+            transform: scale(0.25);
+
+            -ms-transform-origin: 0 0;
+            -moz-transform-origin: 0 0;
+            -o-transform-origin: 0 0;
+            -webkit-transform-origin: 0 0;
+            transform-origin: 0 0;
+        }
+
+    </style>
 </head>
 <body>
 <div id="clients">
@@ -11,48 +72,125 @@
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        var socket = io();
 
-        socket.emit('admin', '');
-        socket.on('clients', function (msg) {
-            console.log(msg);
-        });
+  let clients = [];
 
-        socket.on('joined', function (msg) {
-            console.log(msg);
+  function displayClient(client, submitCallback) {
+    const frag = document.createDocumentFragment();
 
-            const frag = document.createDocumentFragment();
+    const div = document.createElement('div');
+    div.className = 'client';
 
-            const form = document.createElement("form");
-            form.action = "";
-            frag.appendChild(form);
+    const iframeDiv = document.createElement('div');
+    iframeDiv.className = 'frame-container';
 
-            const label = document.createElement("label");
-            label.for = msg;
-            label.innerHTML = "URL for " + msg;
-            form.appendChild(label);
+    const iframe = document.createElement('iframe');
+    iframe.id = `iframe-${client.name}`;
+    iframe.className = 'frame';
+    iframe.src = client.url;
+    iframeDiv.appendChild(iframe);
+    div.appendChild(iframeDiv);
 
-            const input = document.createElement("input");
-            input.id = msg;
-            input.className = 'url';
-            form.appendChild(input);
 
-            const button = document.createElement("button");
-            button.innerHTML = "Display"
-            form.appendChild(button);
+    const formDiv = document.createElement('div');
+    formDiv.className = 'form-container';
 
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                socket.emit('url', {
-                    'name': msg,
-                    'url': this.getElementsByClassName('url')[0].value
-                });
-            })
+    const form = document.createElement('form');
+    form.className = 'form';
+    form.action = '';
+    formDiv.appendChild(form);
+    div.appendChild(formDiv);
+    frag.appendChild(div);
 
-            document.getElementById('clients').appendChild(frag);
-        });
+    const label = document.createElement('label');
+    label.for = client.name;
+    label.innerHTML = 'URL for ' + client.name;
+    form.appendChild(label);
+
+    const span = document.createElement('span');
+    span.className = 'grow';
+    const input = document.createElement('input');
+    input.id = client.name;
+    input.value = client.url;
+    input.className = 'url';
+    span.appendChild(input);
+    form.appendChild(span);
+
+    const button = document.createElement('button');
+    button.innerHTML = 'Display';
+    form.appendChild(button);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      submitCallback(this.getElementsByClassName('url')[0].value);
     });
+
+    // preserve name ordering
+    const clientsElement = document.getElementById('clients');
+    const children = clientsElement.children;
+    let inserted = false;
+    for (let i = 0; i < children.length; i++) {
+      let child = children[i];
+      if (client.name < child.id) {
+        child.parentNode.insertBefore(frag, child);
+        inserted = true;
+        break;
+      }
+    }
+    if (children.length === 0 || inserted === false) {
+      clientsElement.appendChild(frag);
+    }
+  }
+
+  function handleClient(client, socket) {
+    if (!clients[client.name]) {
+      displayClient(client,
+        (url) => socket.emit('url', {
+          network: client.network,
+          name: client.name,
+          url: url
+        }));
+      clients[client.name] = client;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var socket = io();
+
+    const url = new URL(window.location.href);
+    const name = url.searchParams.get('name') || prompt('Client name?', 'admin');
+    const network = url.searchParams.get('network') || prompt('Network name?');
+
+    socket.on('clients', function (msg) {
+      console.log(msg);
+    });
+
+    socket.on('joined', function (msg) {
+      console.log(msg);
+      handleClient(msg, socket, network);
+    });
+
+    socket.on('url', function (msg) {
+      console.log(msg);
+      document.getElementById(`${msg.name}`).value = msg.url;
+      document.getElementById(`iframe-${msg.name}`).src = msg.url;
+    });
+
+    socket.emit('admin', {network: network, name: name}, function (clients) {
+      console.log('Received ' + clients[0]);
+      clients.forEach(client => {
+        handleClient(client, socket);
+      });
+    });
+
+    socket.on('reconnect', function (msg) {
+      socket.emit('admin', {network: network, name: name}, function (clients) {
+        clients.forEach(client => {
+          handleClient(client, socket);
+        });
+      });
+    });
+  });
 </script>
 </body>
 </html>
