@@ -66,7 +66,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    var socket = io();
+    const socket = io();
 
     const url = new URL(window.location.href);
     const name = url.searchParams.get('name') || prompt('Client name?', random());
@@ -78,7 +78,7 @@
     });
     document.title = `${network} - ${name}`;
 
-    socket.on('reconnect', function (msg) {
+    socket.on('reconnect', function () {
       socket.emit('join', {network: network, name: name}, (data) => {
         displayUrl(data);
       });

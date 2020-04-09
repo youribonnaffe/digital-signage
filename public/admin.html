@@ -72,57 +72,33 @@
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-
-  let clients = [];
+  let displayedClients = [];
 
   function displayClient(client, submitCallback) {
-    const frag = document.createDocumentFragment();
+    const template = `<div class="frame-container">
+    <iframe id="iframe-${client.name}" class="frame" src="${client.url}">
+    </iframe>
+  </div>
+  <div id="form-${client.name}" class="form-container">
+    <form class="form" action="">
+      <label for="${client.name}">URL for ${client.name}</label>
+      <span class"grow">
+      <input id="${client.name}" value="${client.url}" class="url"/>
+      </span>
+      <button type="submit">Display</button>
+    </form>
+    </form>
+  </div>
+    `;
 
     const div = document.createElement('div');
+    div.id = `client-${client.name}`;
     div.className = 'client';
+    div.innerHTML = template;
 
-    const iframeDiv = document.createElement('div');
-    iframeDiv.className = 'frame-container';
-
-    const iframe = document.createElement('iframe');
-    iframe.id = `iframe-${client.name}`;
-    iframe.className = 'frame';
-    iframe.src = client.url;
-    iframeDiv.appendChild(iframe);
-    div.appendChild(iframeDiv);
-
-
-    const formDiv = document.createElement('div');
-    formDiv.className = 'form-container';
-
-    const form = document.createElement('form');
-    form.className = 'form';
-    form.action = '';
-    formDiv.appendChild(form);
-    div.appendChild(formDiv);
-    frag.appendChild(div);
-
-    const label = document.createElement('label');
-    label.for = client.name;
-    label.innerHTML = 'URL for ' + client.name;
-    form.appendChild(label);
-
-    const span = document.createElement('span');
-    span.className = 'grow';
-    const input = document.createElement('input');
-    input.id = client.name;
-    input.value = client.url;
-    input.className = 'url';
-    span.appendChild(input);
-    form.appendChild(span);
-
-    const button = document.createElement('button');
-    button.innerHTML = 'Display';
-    form.appendChild(button);
-
-    form.addEventListener('submit', function (e) {
+    div.querySelector(`#form-${client.name}`).addEventListener('submit', function (e) {
       e.preventDefault();
-      submitCallback(this.getElementsByClassName('url')[0].value);
+      submitCallback(this.querySelector('.url').value);
     });
 
     // preserve name ordering
@@ -132,62 +108,71 @@
     for (let i = 0; i < children.length; i++) {
       let child = children[i];
       if (client.name < child.id) {
-        child.parentNode.insertBefore(frag, child);
+        child.parentNode.before(div);
         inserted = true;
         break;
       }
     }
     if (children.length === 0 || inserted === false) {
-      clientsElement.appendChild(frag);
+      clientsElement.append(div);
     }
   }
 
-  function handleClient(client, socket) {
-    if (!clients[client.name]) {
-      displayClient(client,
-        (url) => socket.emit('url', {
-          network: client.network,
-          name: client.name,
-          url: url
-        }));
-      clients[client.name] = client;
+  function showClient(client, socket) {
+    if (!displayedClients[client.name]) {
+      const changedUrlCallback = (url) => socket.emit('admin_url', {
+        network: client.network,
+        name: client.name,
+        url: url
+      });
+      displayClient(client, changedUrlCallback);
+      displayedClients[client.name] = client;
     }
+  }
+
+  function hideClient(msg) {
+    delete displayedClients[msg.name];
+    const clientDiv = document.querySelector(`#client-${msg.name}`);
+    clientDiv.parentNode.removeChild(clientDiv);
+  }
+
+  function updateClientUrl(msg) {
+    document.getElementById(`${msg.name}`).value = msg.url;
+    document.getElementById(`iframe-${msg.name}`).src = msg.url;
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    var socket = io();
+    const socket = io();
 
     const url = new URL(window.location.href);
-    const name = url.searchParams.get('name') || prompt('Client name?', 'admin');
     const network = url.searchParams.get('network') || prompt('Network name?');
 
-    socket.on('clients', function (msg) {
-      console.log(msg);
+    socket.on('admin_joined', function (msg) {
+      console.log(`New client joined network ${msg}`);
+      showClient(msg, socket, network);
     });
 
-    socket.on('joined', function (msg) {
-      console.log(msg);
-      handleClient(msg, socket, network);
+    socket.on('admin_left', function (msg) {
+      console.log(`Client left network ${msg}`);
+      hideClient(msg);
     });
 
-    socket.on('url', function (msg) {
+    socket.on('admin_url', function (msg) {
       console.log(msg);
-      document.getElementById(`${msg.name}`).value = msg.url;
-      document.getElementById(`iframe-${msg.name}`).src = msg.url;
+      updateClientUrl(msg);
     });
 
-    socket.emit('admin', {network: network, name: name}, function (clients) {
-      console.log('Received ' + clients[0]);
-      clients.forEach(client => {
-        handleClient(client, socket);
+    socket.on('reconnect', function () {
+      socket.emit('admin_join', {network: network}, function (clients) {
+        clients.forEach(client => {
+          showClient(client, socket);
+        });
       });
     });
 
-    socket.on('reconnect', function (msg) {
-      socket.emit('admin', {network: network, name: name}, function (clients) {
-        clients.forEach(client => {
-          handleClient(client, socket);
-        });
+    socket.emit('admin_join', {network: network}, function (clients) {
+      clients.forEach(client => {
+        showClient(client, socket);
       });
     });
   });

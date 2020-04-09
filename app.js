@@ -2,101 +2,81 @@
 
 const express = require('express');
 const app = express();
+
 app.use(express.static('public'));
 
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 
-const {Datastore} = require('@google-cloud/datastore');
+const data = require('./data.js');
+const repository = new data.Repository();
 
 /**
  * TODO
- *
- * TODO read documentation for plain JS modules and such, and templating and nodejs/express
- *
- * Channel -> customer (i.e multi tenancy)
- * Rooms -> XX_admins / XX_clients
- *
- *
- * Client has id, network name, url and an admin
- * Admin has id, network and clients
- *
- *
- * Reconnection / disconnection
- * Remove client (to purge old and for tests)
- * Handling of multiple networks
- *
  * CLEANUP
- *
- * Add security
- *
  * Publish on Github
  * Deploy it on GAE
  */
-
-const datastore = new Datastore();
-
-const upsertClient = (client) => {
-  return datastore.upsert({
-    key: datastore.key(['client', client.name]),
-    data: client,
-  });
-};
-
-const getClient = (id) => {
-  return datastore
-    .get(datastore.key(['client', id]));
-};
-
-const getClients = () => {
-  const query = datastore
-    .createQuery('client');
-
-  return datastore.runQuery(query);
-};
-
 io.on('connection', (socket) => {
 
-  socket.on('reconnect', (msg) => {
-    console.log('Reconnection ' + msg);
-  });
-
-  socket.on('url', async (msg) => {
-    console.log(msg);
-
-    await upsertClient(msg);
-
-    socket.broadcast.to(`${msg.network}_${msg.name}`).emit('url', msg);
-    io.in(`${msg.network}_admin`).emit('url', msg);
-  });
-
-  // store clients somewhere
-  socket.on('admin', async (msg, callback) => {
-    socket.join(`${msg.network}_admin`);
-
-    const [clients] = await getClients();
-    console.log(clients);
-
-    console.log(`Admin ${msg.name} joined ${msg.network}`);
-
-    callback(clients);
-  });
-
+  // An admin joined, we send it back its known URL and let admins know
   socket.on('join', async (msg, callback) => {
-
-    const [client] = await getClient(msg.name);
-    if (!client) {
-      await upsertClient(msg);
-    }
+    const client = await repository.clientJoined({
+      network: msg.network,
+      name: msg.name,
+      socket: socket.id,
+      url: msg.url,
+    });
 
     socket.join(`${msg.network}_${msg.name}`);
-    socket.broadcast.to(`${msg.network}_admin`).emit('joined', msg);
+    socket.broadcast.to(`${msg.network}_admin`).emit('admin_joined', msg);
 
     console.log(`Client ${msg.name} joined ${msg.network}`);
 
     if (client.url) {
       callback({url: client.url});
     }
+  });
+
+  // A client disconnects, we remove it from admin pages
+  socket.on('disconnect', async () => {
+    console.log(`Client ${socket.id} left`);
+
+    const client = await repository.clientLeft({
+      socket: socket.id,
+    });
+
+    if (client) { // might not be a client, could be an admin
+      socket.broadcast.to(`${client.network}_admin`).emit('admin_left', client);
+    }
+  });
+
+  // An admin changed a client's URL
+  socket.on('admin_url', async (msg) => {
+    await repository.updateClientUrl({
+      network: msg.network,
+      name: msg.name,
+      url: msg.url,
+    });
+
+    socket.broadcast.to(`${msg.network}_${msg.name}`).emit('url', msg);
+    io.in(`${msg.network}_admin`).emit('admin_url', msg);
+
+    console.log(`Url changed to ${msg}`);
+  });
+
+  // An admin joined the network, we send it the connected clients
+  socket.on('admin_join', async (msg, callback) => {
+    socket.join(`${msg.network}_admin`);
+
+    console.log(`Admin ${socket.id} joined ${msg.network}`);
+
+    const [clients] = await repository.getUpClients(msg.network);
+    console.log(clients);
+    callback(clients
+      .map(({name, url, network}) => {
+        return {name, url, network};
+      }));
   });
 });
 
