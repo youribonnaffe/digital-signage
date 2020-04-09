@@ -18,9 +18,17 @@ class Repository {
     });
   }
 
-  clientJoined(client) {
+  async clientJoined(client) {
+    const [entity] = await this.datastore
+      .get(this.datastore.key(['client', `${client.network}_${client.name}`]));
+
+    if (entity) {
+      console.log("existing client")
+      client.url = entity.url;
+    }
     client.status = CLIENT_UP;
-    return this.upsertClient(client);
+    await this.upsertClient(client);
+    return client;
   }
 
   async clientLeft(client) {

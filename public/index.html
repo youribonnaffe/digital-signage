@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Simple Digital Signage</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
+</head>
+<body>
+<section class="section">
+    <div class="container">
+        <h1 class="title">
+            Simple digital signage
+        </h1>
+        <p class="subtitle">
+            An easy way to display web content on remotely devices!
+        </p>
+    </div>
+</section>
+<section class="section">
+    <div class="container">
+        <div class="content">
+            <p class="is-size-5">
+                1. Pick a network name, such as
+                <input id="input-network" class="is-size-5" placeholder="network's name" value="network"/> and access
+                the admin interface
+            </p>
+        </div>
+        <div class="content">
+            <div class="columns ">
+                <div class="column  has-text-centered ">
+                    <a id="a-admin" href="" target="_blank"></a>
+                </div>
+            </div>
+        </div>
+        <div class="content">
+        </div>
+    </div>
+    <div class="container">
+        <div class="content">
+            <p class="is-size-5">
+                2. On your remote device, pick a client's name such as
+                <input id="input-client" class="is-size-5" placeholder="client's name" value="client"/> and access the
+                client interface
+            </p>
+        </div>
+        <div class="content">
+            <div class="columns ">
+                <div class="column  has-text-centered ">
+                    <a id="a-client" href=""></a>
+                </div>
+            </div>
+        </div>
+        <div class="content">
+        </div>
+    </div>
+    <div class="container">
+        <div class="content">
+            <p class="is-size-5">
+                3. In the admin interface, set the URL the remote device should display.
+            </p>
+        </div>
+    </div>
+</section>
+<section class="section">
+    <div class="container">
+        <div class="content">
+            <div class="notification is-info">
+                Iframes are used to display the webpage on the client side.
+                Therefore the header <code>X-Frame-Options</code> must <strong>not</strong> be set to
+                <code>sameorigin</code>.
+            </div>
+            <div class="notification is-warning">
+                Nothing is enforced in term of security, anyone can guess a network's name to access the admin page.
+            </div>
+        </div>
+    </div>
+</section>
+<footer class="footer">
+    <div class="content has-text-centered">
+        <p>
+            Sources available on Github
+        </p>
+    </div>
+</footer>
+<script>
+  function random() {
+    return Math.random().toString(36).substring(7);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+
+    const networkId = random();
+    document.querySelector('#input-network').value = networkId;
+    const aAdmin = document.querySelector('#a-admin');
+    aAdmin.href = aAdmin.innerHTML = `${window.location.origin}/admin.html?network=${networkId}`;
+
+    const clientId = random();
+    document.querySelector('#input-client').value = clientId;
+    const aClient = document.querySelector('#a-client');
+    aClient.href = aClient.innerHTML = `${window.location.origin}/client.html?network=${networkId}&name=${clientId}`;
+  });
+</script>
+</body>
+</html>

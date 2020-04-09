@@ -11,25 +11,17 @@ const io = require('socket.io')(server);
 const data = require('./data.js');
 const repository = new data.Repository();
 
-/**
- * TODO
- * CLEANUP
- * Publish on Github
- * Deploy it on GAE
- */
 io.on('connection', (socket) => {
-
-  // An admin joined, we send it back its known URL and let admins know
+  // A client joined, we send it back its known URL and let admins know
   socket.on('join', async (msg, callback) => {
     const client = await repository.clientJoined({
       network: msg.network,
       name: msg.name,
       socket: socket.id,
-      url: msg.url,
     });
 
     socket.join(`${msg.network}_${msg.name}`);
-    socket.broadcast.to(`${msg.network}_admin`).emit('admin_joined', msg);
+    socket.broadcast.to(`${msg.network}_admin`).emit('admin_client_joined', client);
 
     console.log(`Client ${msg.name} joined ${msg.network}`);
 

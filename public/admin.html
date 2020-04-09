@@ -4,23 +4,13 @@
     <title></title>
     <meta charset="utf-8">
     <style>
-        html, body {
-            height: 100%;
-            width: 100%;
-        }
-
         #clients {
             display: flex;
             flex-wrap: wrap;
         }
 
         .client {
-            border: 1px solid black;
             padding: 5px;
-        }
-
-        .form-container {
-            display: flex;
         }
 
         .form {
@@ -28,23 +18,12 @@
             margin: 10px;
         }
 
-        .form > * {
-            padding: 2px;
-        }
-
-        .grow {
-            flex-grow: 1;
-        }
-
-        input {
-            width: 60%;
-        }
-
         .frame-container {
             width: 480px;
             height: 320px;
             padding: 0;
             overflow: hidden;
+            display: block !important;
         }
 
         .frame {
@@ -65,6 +44,7 @@
         }
 
     </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
 </head>
 <body>
 <div id="clients">
@@ -75,24 +55,29 @@
   let displayedClients = [];
 
   function displayClient(client, submitCallback) {
-    const template = `<div class="frame-container">
-    <iframe id="iframe-${client.name}" class="frame" src="${client.url}">
+    const template = `<div class="is-link panel">
+  <p class="panel-heading">${client.name}</p>
+  <div class="panel-block frame-container">
+    <iframe id="iframe-${client.name}" class="frame" src="${client.url || ''}">
     </iframe>
   </div>
-  <div id="form-${client.name}" class="form-container">
-    <form class="form" action="">
-      <label for="${client.name}">URL for ${client.name}</label>
-      <span class"grow">
-      <input id="${client.name}" value="${client.url}" class="url"/>
-      </span>
-      <button type="submit">Display</button>
-    </form>
+  <div class="panel-block">
+    <form id="form-${client.name}" class="form" action="">
+      <div class="form-container field has-addons">
+        <p class="control is-expanded">
+          <input id="${client.name}" value="${client.url || ''}" class="url input" placeholder="URL"/>
+        </p>
+        <p class="control">
+          <button class="button is-link" type="submit">Display</button>
+        </p>
     </form>
   </div>
+</div>
     `;
 
     const div = document.createElement('div');
     div.id = `client-${client.name}`;
+    div.dataset.name = client.name;
     div.className = 'client';
     div.innerHTML = template;
 
@@ -107,8 +92,8 @@
     let inserted = false;
     for (let i = 0; i < children.length; i++) {
       let child = children[i];
-      if (client.name < child.id) {
-        child.parentNode.before(div);
+      if (client.name < child.dataset.name) {
+        child.before(div);
         inserted = true;
         break;
       }
@@ -118,64 +103,64 @@
     }
   }
 
-  function showClient(client, socket) {
-    if (!displayedClients[client.name]) {
-      const changedUrlCallback = (url) => socket.emit('admin_url', {
-        network: client.network,
-        name: client.name,
-        url: url
-      });
-      displayClient(client, changedUrlCallback);
-      displayedClients[client.name] = client;
+    function showClient(client, socket) {
+      if (!displayedClients[client.name]) {
+        const changedUrlCallback = (url) => socket.emit('admin_url', {
+          network: client.network,
+          name: client.name,
+          url: url
+        });
+        displayClient(client, changedUrlCallback);
+        displayedClients[client.name] = client;
+      }
     }
-  }
 
-  function hideClient(msg) {
-    delete displayedClients[msg.name];
-    const clientDiv = document.querySelector(`#client-${msg.name}`);
-    clientDiv.parentNode.removeChild(clientDiv);
-  }
+    function hideClient(msg) {
+      delete displayedClients[msg.name];
+      const clientDiv = document.querySelector(`#client-${msg.name}`);
+      clientDiv.parentNode.removeChild(clientDiv);
+    }
 
-  function updateClientUrl(msg) {
-    document.getElementById(`${msg.name}`).value = msg.url;
-    document.getElementById(`iframe-${msg.name}`).src = msg.url;
-  }
+    function updateClientUrl(msg) {
+      document.getElementById(`${msg.name}`).value = msg.url;
+      document.getElementById(`iframe-${msg.name}`).src = msg.url;
+    }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const socket = io();
+    document.addEventListener('DOMContentLoaded', function () {
+      const socket = io();
 
-    const url = new URL(window.location.href);
-    const network = url.searchParams.get('network') || prompt('Network name?');
+      const url = new URL(window.location.href);
+      const network = url.searchParams.get('network') || prompt('Network name?');
 
-    socket.on('admin_joined', function (msg) {
-      console.log(`New client joined network ${msg}`);
-      showClient(msg, socket, network);
-    });
+      socket.on('admin_client_joined', function (msg) {
+        console.log(`New client joined network ${msg}`);
+        showClient(msg, socket, network);
+      });
 
-    socket.on('admin_left', function (msg) {
-      console.log(`Client left network ${msg}`);
-      hideClient(msg);
-    });
+      socket.on('admin_left', function (msg) {
+        console.log(`Client left network ${msg}`);
+        hideClient(msg);
+      });
 
-    socket.on('admin_url', function (msg) {
-      console.log(msg);
-      updateClientUrl(msg);
-    });
+      socket.on('admin_url', function (msg) {
+        console.log(msg);
+        updateClientUrl(msg);
+      });
 
-    socket.on('reconnect', function () {
+      socket.on('reconnect', function () {
+        socket.emit('admin_join', {network: network}, function (clients) {
+          clients.forEach(client => {
+            showClient(client, socket);
+          });
+        });
+      });
+
       socket.emit('admin_join', {network: network}, function (clients) {
         clients.forEach(client => {
           showClient(client, socket);
         });
       });
     });
-
-    socket.emit('admin_join', {network: network}, function (clients) {
-      clients.forEach(client => {
-        showClient(client, socket);
-      });
-    });
-  });
 </script>
 </body>
 </html>
