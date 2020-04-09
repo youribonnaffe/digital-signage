@@ -5,7 +5,9 @@
   "engines": {
     "node": ">=8.0.0"
   },
+  "main": "app.js",
   "scripts": {
+    "start": "node app.js",
     "lint": "eslint .",
     "fix": "eslint --fix ."
   },
